@@ -396,3 +396,64 @@
                                       include #{:documents :distances :metadatas}}
                                  :as options}]
   (->WrappingPromise (query-batch collection [query-embedding] options) first))
+
+;; ============================================================================
+;; v2 API: Hybrid Search
+;; ============================================================================
+
+(defn search
+  "Perform hybrid search combining vector similarity, metadata filtering,
+  and full-text search (v2 API only).
+
+  NOTE: Chroma Cloud only - not available in self-hosted/local deployments.
+  Local executor returns 'Not implemented for local executor'.
+
+  `searches` is a vector of search specifications, each containing:
+    - :filter {:query-ids [...] :where {...}}  - Filter criteria
+    - :rank {...}                              - Ranking configuration
+    - :select {:keys [...]}                    - Fields to return
+    - :limit {:limit n :offset m}              - Pagination
+    - :group-by {:keys [...] :aggregate {...}} - Grouping
+
+  Example:
+    (search collection
+      [{:filter {:where {:type \"note\"}}
+        :limit {:limit 10}
+        :select {:keys [\"documents\" \"metadatas\"]}}])"
+  [collection searches]
+  (let [;; Transform clojure-style keys to API format
+        transform-search (fn [s]
+                           (cond-> {}
+                             (:filter s)
+                             (assoc :filter
+                                    (cond-> {}
+                                      (get-in s [:filter :query-ids])
+                                      (assoc :query_ids (get-in s [:filter :query-ids]))
+                                      (get-in s [:filter :where])
+                                      (assoc :where_clause (normalize-where (get-in s [:filter :where])))))
+                             (:rank s) (assoc :rank (:rank s))
+                             (:select s) (assoc :select (:select s))
+                             (:limit s) (assoc :limit (:limit s))
+                             (:group-by s) (assoc :group_by (:group-by s))))
+        body {:searches (mapv transform-search searches)}
+        url (str "collections/" (:id collection) "/search")]
+    (request :post url {} body identity)))
+
+;; ============================================================================
+;; v2 API: Collection Fork
+;; ============================================================================
+
+(defn fork-collection
+  "Fork (copy) a collection to a new collection with the given name (v2 API only).
+
+  NOTE: Chroma Cloud only - not available in self-hosted/local deployments.
+  Local executor returns 'Collection forking is unsupported for local chroma'.
+
+  Returns the newly created collection.
+
+  Example:
+    (fork-collection my-collection \"my-collection-backup\")"
+  [collection new-name]
+  (let [url (str "collections/" (:id collection) "/fork")
+        body {:new_name new-name}]
+    (request :post url {} body identity)))
