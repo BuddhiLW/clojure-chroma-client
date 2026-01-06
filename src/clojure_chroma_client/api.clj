@@ -272,6 +272,29 @@
                  (zipmap newcols vals))
            (vals (select-keys m cols)))))
 
+(defn- normalize-where
+  "Normalize where clause for v2 API compatibility.
+   v2 API requires $and for multiple top-level conditions.
+   {:type \"note\" :project-id \"foo\"} becomes
+   {:$and [{:type \"note\"} {:project-id \"foo\"}]}"
+  [where]
+  (cond
+    ;; nil or empty - pass through
+    (or (nil? where) (empty? where))
+    where
+    ;; Already has $and or $or - pass through
+    (or (contains? where :$and) (contains? where :$or))
+    where
+    ;; Single key - pass through as-is
+    (= 1 (count where))
+    where
+    ;; v1 API doesn't need normalization
+    (= "v1" config/*api-version*)
+    where
+    ;; Multiple keys in v2 - wrap in $and
+    :else
+    {:$and (mapv (fn [[k v]] {k v}) where)}))
+
 (defn get
   "Get embeddings from a collection.
 
@@ -303,8 +326,12 @@
               :include include
               :offset offset
               :limit limit}
-        body (select-keys opts [:where :ids :include])
-        body (assoc body :where_document where-document)
+        ;; Normalize where clause for v2 API (requires $and for multiple conditions)
+        normalized-where (normalize-where where)
+        body {:where normalized-where
+              :ids ids
+              :include include
+              :where_document where-document}
         params (select-keys opts [:limit :offset])
         url (str "collections/" (:id collection) "/get")
         fields (conj include :ids)]
@@ -330,6 +357,7 @@
   (when-not (or where ids where-document)
     (throw (ex-info "Delete requires `ids`, `where` or `where-document`" {})))
   (let [body (-> options
+                 (assoc :where (normalize-where where))
                  (assoc :where_document where-document)
                  (dissoc :where-document))]
     (request :post (str "collections/" (:id collection) "/delete")
@@ -349,7 +377,7 @@
                                   :as options}]
   (let [body {:query_embeddings query-embeddings
               :n_results num-results
-              :where where
+              :where (normalize-where where)
               :where_document where-document
               :include include}
         url (str "collections/" (:id collection) "/query")
