@@ -1,0 +1,6 @@
+{:project-id "clojure-chroma-client"
+ :parent "hive"
+ :description "Thin map-oriented Clojure client for the Chroma vector database (OSS + managed cloud), replacing the OpenAPI-generated parallel-list API with Clojure collections."
+ :language :clojure
+ :tags ["vector-db" "chroma" "client" "leaf"]
+ :carto {:source-roots ["src" "test"]}}
