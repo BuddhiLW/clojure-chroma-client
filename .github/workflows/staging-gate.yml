@@ -27,13 +27,9 @@ jobs:
   gate:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    # The API tests talk to a real Chroma server; run one beside the job.
-    services:
-      chroma:
-        image: chromadb/chroma:latest
-        ports: ['8000:8000']
-        env:
-          ALLOW_RESET: 'TRUE'
+    # The API tests run against an in-process stub Chroma
+    # (test/clojure_chroma_client/stub), so no Chroma service is needed.
+    # CHROMA_LIVE=true runs them against a real Chroma instead.
     env:
       CHROMA_HOST: localhost
       CHROMA_ALLOW_RESET: 'true'
@@ -76,11 +72,6 @@ jobs:
             <password>${MAVEN_TOKEN}</password>
           </server></servers></settings>
           EOF
-
-      - name: Wait for Chroma
-        run: |
-          for i in $(seq 1 30); do curl -fs http://localhost:8000/api/v2/heartbeat && exit 0; sleep 2; done
-          echo "chroma did not come up"; exit 1
 
       # The pins must resolve from the registries before anything else is
       # worth running: this is the step a dependency sweep can break.

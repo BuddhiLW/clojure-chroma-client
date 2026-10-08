@@ -1,8 +1,20 @@
 (ns clojure-chroma-client.integration-test
   (:require [clojure-chroma-client.api :as api]
             [clojure-chroma-client.config :as cfg]
+            [clojure-chroma-client.stub.server :as stub]
             [clojure.test :as test :refer [testing deftest is run-tests]])
   (:import [java.util UUID]))
+
+(defn- stub-unless-live
+  "Run each test against the in-process stub Chroma, so CI needs no Chroma
+  service. Set CHROMA_LIVE=true (plus the usual CHROMA_* config) to run the
+  same tests against a real Chroma instead."
+  [f]
+  (if (= "true" (cfg/getenv "CHROMA_LIVE"))
+    (f)
+    (stub/call-with-stub (fn [_stub] (f)))))
+
+(test/use-fixtures :each stub-unless-live)
 
 (deftest heartbeat
   (is @(api/heartbeat)))
